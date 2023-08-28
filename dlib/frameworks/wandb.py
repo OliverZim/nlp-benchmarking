@@ -13,8 +13,8 @@ from loguru import logger
 
 from ..frameworks.pytorch import get_rank
 
-WANDB_PROJECT = "main_server"
-WANDB_ENTITY = "nlp_benchmarks"
+WANDB_PROJECT = os.environ["WANDB_PROJECT"]
+WANDB_ENTITY = os.environ["WANDB_ENTITY"]
 
 if WANDB_ENTITY == "<your entity>" or WANDB_PROJECT == "<your project>":
     logger.warning(

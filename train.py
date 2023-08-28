@@ -228,10 +228,6 @@ class MiscArgs:
         help='Apply fix to circumvent "Too many open files" error caused by the PyTorch Dataloader when using many workers or large batches.',  # noqa: E501
         aliases="--open_files_fix",
     )
-    benchmark: bool = dArg(
-        default=True,
-        help='Allows to turn the benchmarking of the script on/off.'
-    )
 
 
 @logger.catch(reraise=True)
@@ -275,9 +271,8 @@ def main(parsed_arg_groups: tuple[TrainingArgs, MiscArgs]):
     )
 
     ########### define summary metrics for benchmarking ###########
-    if misc_args.benchmark:
-        wandb_logger.experiment.define_metric("SamplesPerSecond", summary="mean")
-        wandb_logger.experiment.define_metric("TokensPerSecond", summary="mean")
+    wandb_logger.experiment.define_metric("SamplesPerSecond", summary="mean")
+    wandb_logger.experiment.define_metric("TokensPerSecond", summary="mean")
 
     ########### Specifiy auto arguments ###########
     if args.accelerator == "auto":
@@ -411,13 +406,11 @@ def main(parsed_arg_groups: tuple[TrainingArgs, MiscArgs]):
     dm = LMDataModule(training_args=args, misc_args=misc_args)
     lr_monitor = LearningRateMonitor(logging_interval="step")
     callbacks = [wandb_disk_cleanup_callback, lr_monitor]
-    if misc_args.benchmark:
-        samplesPerSecondBenchmark = SamplesPerSecondBenchmark(args.max_sequence_length)
-        gpuMetricsBenchmark = GpuMetricsBenchmark()
-        benchmarks = [samplesPerSecondBenchmark, gpuMetricsBenchmark]
-        callbacks.extend(benchmarks)
-    else:
-        callbacks.append(checkpoint_callback)
+    samplesPerSecondBenchmark = SamplesPerSecondBenchmark(args.max_sequence_length)
+    gpuMetricsBenchmark = GpuMetricsBenchmark()
+    benchmarks = [samplesPerSecondBenchmark, gpuMetricsBenchmark]
+    callbacks.extend(benchmarks)
+
     if args.accelerator == "cuda":
         callbacks.append(CUDAMetricsCallback())
 
@@ -434,45 +427,25 @@ def main(parsed_arg_groups: tuple[TrainingArgs, MiscArgs]):
         plugins = [LightningEnvironment()]
 
     # Initialize trainer
-    if misc_args.benchmark:
-        trainer = Trainer(
-            max_steps=args.training_goal,
-            check_val_every_n_epoch=None,  # validation based on steps instead of epochs
-            devices=args.cuda_device_ids or args.num_devices,
-            accelerator=args.accelerator,
-            strategy=distributed_strategy,
-            logger=wandb_logger,
-            deterministic=misc_args.force_deterministic,
-            callbacks=callbacks,
-            plugins=plugins,
-            enable_checkpointing=False,
-            precision=args.precision,
-            gradient_clip_val=args.gradient_clipping,
-            accumulate_grad_batches=args.gradient_accumulation_steps,
-            fast_dev_run=misc_args.fast_dev_run,
-            inference_mode=not args.compile,  # inference_mode for val/test and PyTorch 2.0 compiler don't like each other  # noqa: E501
-            num_sanity_val_steps=0,
-        )
-    else:
-        trainer = Trainer(
-            max_steps=args.training_goal,
-            val_check_interval=args.val_frequency,
-            check_val_every_n_epoch=None,  # validation based on steps instead of epochs
-            devices=args.cuda_device_ids or args.num_devices,
-            accelerator=args.accelerator,
-            strategy=distributed_strategy,
-            logger=wandb_logger,
-            deterministic=misc_args.force_deterministic,
-            callbacks=callbacks,
-            plugins=plugins,
-            enable_checkpointing=True,
-            precision=args.precision,
-            gradient_clip_val=args.gradient_clipping,
-            accumulate_grad_batches=args.gradient_accumulation_steps,
-            fast_dev_run=misc_args.fast_dev_run,
-            inference_mode=not args.compile,  # inference_mode for val/test and PyTorch 2.0 compiler don't like each other  # noqa: E501
-        )
-
+    trainer = Trainer(
+        max_steps=args.training_goal,
+        check_val_every_n_epoch=None,  # validation based on steps instead of epochs
+        devices=args.cuda_device_ids or args.num_devices,
+        accelerator=args.accelerator,
+        strategy=distributed_strategy,
+        logger=wandb_logger,
+        deterministic=misc_args.force_deterministic,
+        callbacks=callbacks,
+        plugins=plugins,
+        enable_checkpointing=False,
+        precision=args.precision,
+        gradient_clip_val=args.gradient_clipping,
+        accumulate_grad_batches=args.gradient_accumulation_steps,
+        fast_dev_run=misc_args.fast_dev_run,
+        inference_mode=not args.compile,  # inference_mode for val/test and PyTorch 2.0 compiler don't like each other  # noqa: E501
+        num_sanity_val_steps=0,
+    )
+   
     if args.val_before_training and not args.resume_training:
         # TODO: we could use a new trainer with Trainer(devices=1, num_nodes=1) to prevent samples from possibly getting replicated with DistributedSampler here.  # noqa: E501
         logger.info(f"Rank {current_process_rank} | Validation before training...")
@@ -488,44 +461,11 @@ def main(parsed_arg_groups: tuple[TrainingArgs, MiscArgs]):
             "Detected keyboard interrupt, not trying to save latest checkpoint right now because we detected SLURM and do not want to drain the node..."
         )
     else:
-        if not misc_args.benchmark:
-            logger.success("Fit complete, starting validation...")
-            # Validate after training has finished
-            trainer.validate(model, dm)
-
         if current_process_rank == 0:
-            if not misc_args.benchmark:
-                logger.info("Trying to save checkpoint....")
-
-                save_path = str(Path(checkpoint_callback.dirpath) / "last_model_ckpt.ckpt")
-                trainer.save_checkpoint(save_path)
-
-                logger.info("Collecting PL checkpoint for wandb...")
-                artifact = wandb.Artifact(name=f"model-{wandb_logger.experiment.id}", type="model")
-                artifact.add_file(save_path, name="model.ckpt")
-
-                logger.info('Collecting "raw" HF checkpoint for wandb...')
-                # Also save raw huggingface checkpoint, so that we don't need lightning and the current code structure to load the weights  # noqa: E501
-                raw_huggingface_model: PreTrainedModel = trainer.lightning_module.model
-                save_path = str(Path(checkpoint_callback.dirpath) / "raw_huggingface")
-                raw_huggingface_model.save_pretrained(save_path)
-                artifact.add_dir(save_path, name="raw_huggingface")
-
-                logger.info("Pushing to wandb...")
-                aliases = ["train_end", "latest"]
-                wandb_logger.experiment.log_artifact(artifact, aliases=aliases)
-
-            if misc_args.benchmark:
-                # setup = {
-                #     "Number of Workers": args.workers,
-                #     "Compile": args.compile,
-                #     "Precision": args.precision,
-                # }
-                # wandb_logger.experiment.summary["Setup"] = setup
-                wandb_logger.experiment.summary["Number of Workers"] = args.workers
-                wandb_logger.experiment.summary["Compile"] = args.compile
-                wandb_logger.experiment.summary["Precision"] = args.precision
-                wandb_logger.experiment.summary["Means"] = gpuMetricsBenchmark.compute_means()
+            wandb_logger.experiment.summary["Number of Workers"] = args.workers
+            wandb_logger.experiment.summary["Compile"] = args.compile
+            wandb_logger.experiment.summary["Precision"] = args.precision
+            wandb_logger.experiment.summary["Means"] = gpuMetricsBenchmark.compute_means()
             logger.success("Saving finished!")
 
 

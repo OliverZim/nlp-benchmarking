@@ -12,14 +12,14 @@ if [ "$current_directory" == "scripts" ]; then
 fi
 
 # Change the following to the actual GPU devices you want to work on (e.g DEVICES="0,1") or to NONE if you do not plan on using any GPUs
-DEVICES="4"
+DEVICES="NONE"
 
 # Change the following to your caching directory if you want persistent caching (e.g. CACHE_DIR="/scratch1/username/.cache"), else set it to NONE
 # if you plan on mounting a cache-folder you will have to create one, before you can run this script
-CACHE_DIR="/scratch1/ozimmermann/cache"
+CACHE_DIR=
 
 # Change the following image-tag to the name of your own image, if you do not want to use the default one
-IMAGE_TAG="oliverzim/nlp-benchmarks:oldOPENMPversion"
+IMAGE_TAG=
 
 docker run -it \
     --user $(id -u):$(id -g) \

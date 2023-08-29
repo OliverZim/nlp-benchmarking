@@ -4,3 +4,4 @@ This script can be used to benchmark common best practices in deep learning (e.g
 
 For example results take a look at these reports:
 * [basic report with wandb](https://api.wandb.ai/links/nlp_benchmarks/61y8sxqu)
+* [refined report with wandb](https://api.wandb.ai/links/nlp_benchmarks/p9dltkjf)

@@ -153,7 +153,7 @@ class TrainingArgs:
         help="Period in training goal units between two model checkpoints. If <1, compute as fraction of training_goal",
         aliases="--mfq",
     )
-    val_before_training: bool = dArg(default=True, help="Run one validation epoch before training.")
+    val_before_training: bool = dArg(default=False, help="Run one validation epoch before training.")
     val_only: bool = dArg(default=False, help="Run one validation epoch before training.")
     batch_size_per_device: int = dArg(
         default=42,

@@ -141,3 +141,7 @@ dmypy.json
 
 # everything that has to do with run-results 
 /template
+
+# personal setup
+personal_benchmarks.slurm
+personal_config.sh

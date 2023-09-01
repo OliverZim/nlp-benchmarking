@@ -374,5 +374,5 @@ def produce_example(tokenizer, sequence_length):
         random_token_sequence = random.sample(tokens, sequence_length)
         random_token_sequence = tokenizer.convert_tokens_to_ids(random_token_sequence)
         sentence = tokenizer.decode(random_token_sequence)
-        item = tokenizer.encode(sentence)
+        item = tokenizer(sentence, truncation=True)
         return item

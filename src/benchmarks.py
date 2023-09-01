@@ -21,6 +21,7 @@ class SamplesPerSecondBenchmark(Callback):
         self.batch_interval = batch_interval    # defines the limit of batches for when the metric is computed the next time
         self.start_time = None
         self.num_samples = 0
+        self.num_tokens = 0
         self.max_sequence_length = max_sequence_length
         #self.batches_seen = 0
 
@@ -32,14 +33,16 @@ class SamplesPerSecondBenchmark(Callback):
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         # calculate how many samples have been passed so far
         batch_size = batch["input_ids"].size(dim=0)
+        sequence_length = batch["input_ids"].size(dim=1)
         self.num_samples += batch_size
+        self.num_tokens += batch_size * sequence_length
 
         # compute and log the samplesPerSecond based on the number of samples
         if (batch_idx+1) % self.batch_interval == 0:  # log every batch_interval batches
             curr_time = time.time()
             elapsed_time = curr_time - self.start_time
             samplesPerSecond = self.num_samples / elapsed_time
-            tokensPerSecond = samplesPerSecond * self.max_sequence_length
+            tokensPerSecond = self.num_tokens / elapsed_time
             trainer.logger.experiment.log({"SamplesPerSecond": samplesPerSecond})
             trainer.logger.experiment.log({"TokensPerSecond": tokensPerSecond})
 

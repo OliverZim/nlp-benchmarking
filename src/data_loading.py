@@ -7,6 +7,7 @@ from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING
 import random
+import time
 
 import datasets
 import lightning as L
@@ -305,15 +306,17 @@ def make_group_text_function(max_seq_length):
     return group_texts
 
 class SyntheticDataset(Dataset):
-    def __init__(self, dataset_size, example):
+    def __init__(self, dataset_size, example, load_time):
         super().__init__()
         self.dataset_size = dataset_size
         self.example = example
+        self.load_time = load_time
 
     def __len__(self):
         return self.dataset_size
 
     def __getitem__(self, idx):
+        time.sleep(self.load_time)
         return self.example
 
 class SyntheticDataModule(L.LightningDataModule):

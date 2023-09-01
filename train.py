@@ -28,7 +28,7 @@ from dlib.frameworks.wandb import (
     check_checkpoint_path_for_wandb,
     check_for_wandb_checkpoint_and_download_if_necessary,
 )
-from src.data_loading import LMDataModule
+from src.data_loading import LMDataModule, SyntheticDataset, SyntheticDataModule, produce_example
 from src.helpers import (
     choose_auto_accelerator,
     choose_auto_devices,
@@ -228,6 +228,12 @@ class MiscArgs:
         help='Apply fix to circumvent "Too many open files" error caused by the PyTorch Dataloader when using many workers or large batches.',  # noqa: E501
         aliases="--open_files_fix",
     )
+    synthetic_data: bool dArg(
+        default=True, help="Decide whether or not to use synthetic data for your experiments. You do not need to specify a specific data_dir when using this option."
+    )
+    sd_size: int dArg(
+        default=10000000, help="Sice of the synthetic dataset."
+    )
 
 
 @logger.catch(reraise=True)
@@ -403,7 +409,14 @@ def main(parsed_arg_groups: tuple[TrainingArgs, MiscArgs]):
         model = torch.compile(model)
 
     #################### Construct dataloaders & trainer #################
-    dm = LMDataModule(training_args=args, misc_args=misc_args)
+    if misc_args.synthetic_data == True:
+        os.environ["TOKENIZERS_PARALLELISM"] = "False" # make sure there won't be any deadlocks when loading data by turning parallel tokenization off
+        example = produce_example(tokenizer=tokenizer, sequence_length=args.max_seq_length)
+        synthetic_dataset = SyntheticDataset(dataset_size=misc_args.sd_size, example=example)
+        dm = SyntheticDataModule(training_args=args, misc_args=misc_args, dataset=synthetic_dataset, tokenizer=tokenizer)
+    else:
+        dm = LMDataModule(training_args=args, misc_args=misc_args)
+    
     lr_monitor = LearningRateMonitor(logging_interval="step")
     callbacks = [wandb_disk_cleanup_callback, lr_monitor]
     samplesPerSecondBenchmark = SamplesPerSecondBenchmark(args.max_sequence_length)

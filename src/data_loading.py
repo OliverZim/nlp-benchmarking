@@ -6,10 +6,12 @@ import tempfile
 from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING
+import random
 
 import datasets
 import lightning as L
 from loguru import logger
+from torch.utils.data import Dataset
 from torch.utils.data.dataloader import DataLoader
 from transformers import DataCollatorForLanguageModeling
 from transformers.data.data_collator import DataCollatorForWholeWordMask
@@ -301,3 +303,76 @@ def make_group_text_function(max_seq_length):
         return result
 
     return group_texts
+
+class SyntheticDataset(Dataset):
+    def __init__(self, dataset_size, example):
+        super().__init__()
+        self.dataset_size = dataset_size
+        self.example = example
+
+    def __len__(self):
+        return self.dataset_size
+
+    def __getitem__(self, idx):
+        return self.example
+
+class SyntheticDataModule(L.LightningDataModule):
+    def __init__(
+            self,
+            training_args: "TrainingArgs",
+            misc_args: "MiscArgs",
+            dataset,
+            tokenizer,
+            mlm_probability=0.15,
+            whole_word_masking=False
+        ):
+            super().__init__()
+            self.args = training_args
+            self.misc_args = misc_args
+            self.dataset = dataset
+            self.whole_word_masking = whole_word_masking
+            self.mlm_probability = mlm_probability
+            self.tokenizer = tokenizer
+
+    
+    
+    def setup(self, stage):
+        pad_to_multiple_of = 8 if self.args.precision in ["16-mixed", "bf16-mixed"] else None
+        if self.args.language_modeling_strategy == "clm":
+            data_collator = DataCollatorForLanguageModeling(
+                tokenizer=self.tokenizer, mlm=False, pad_to_multiple_of=pad_to_multiple_of
+            )
+        elif self.args.language_modeling_strategy == "mlm":
+            DataCollatorClass = (
+                DataCollatorForWholeWordMask
+                if self.whole_word_masking
+                else DataCollatorForLanguageModeling
+            )
+            data_collator = DataCollatorClass(
+                tokenizer=self.tokenizer,
+                mlm=True,
+                mlm_probability=self.mlm_probability,
+                pad_to_multiple_of=pad_to_multiple_of,
+            )
+        self.data_collator = data_collator
+
+    def train_dataloader(self):
+        common_args = dict(
+            batch_size=self.args.batch_size_per_device,
+            num_workers=self.args.workers,
+            persistent_workers=(True if self.args.workers > 0 else False),  # https://discuss.pytorch.org/t/what-are-the-dis-advantages-of-persistent-workers/102110/10
+            pin_memory=True,
+            worker_init_fn=set_torch_file_sharing_strategy_to_system
+            if self.misc_args.too_many_open_files_fix
+            else None,
+            shuffle=True,
+        )
+        return DataLoader(self.dataset, collate_fn=self.data_collator, **common_args)
+
+def produce_example(tokenizer, sequence_length):
+        tokens = [key for key in tokenizer.vocab]
+        random_token_sequence = random.sample(tokens, sequence_length)
+        random_token_sequence = tokenizer.convert_tokens_to_ids(random_token_sequence)
+        sentence = tokenizer.decode(random_token_sequence)
+        item = tokenizer.encode(sentence)
+        return item

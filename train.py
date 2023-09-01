@@ -228,12 +228,21 @@ class MiscArgs:
         help='Apply fix to circumvent "Too many open files" error caused by the PyTorch Dataloader when using many workers or large batches.',  # noqa: E501
         aliases="--open_files_fix",
     )
-    synthetic_data: bool dArg(
+    synthetic_data: bool = dArg(
         default=True, help="Decide whether or not to use synthetic data for your experiments. You do not need to specify a specific data_dir when using this option."
     )
-    sd_size: int dArg(
+    sd_size: int = dArg(
         default=10000000, help="Sice of the synthetic dataset."
     )
+    sd_seq_len: int = dArg(
+        default = 0, help= "Sequence length of the synthetic data." 
+    )
+    # sd_seq_len_var: int = dArg(
+    #     default = 1, help = "Variance of the sequence length of synthetic data."
+    # )
+    # sd_distribution: Literal["fixed", "normal"] = dArg(
+    #     default="fixed", help="Distribution of the sequence length of the synthetic data"
+    # )
 
 
 @logger.catch(reraise=True)
@@ -335,6 +344,9 @@ def main(parsed_arg_groups: tuple[TrainingArgs, MiscArgs]):
     args.model_log_frequency = int(args.model_log_frequency / goal_units_per_optimizer_step)
     args.lr_warmup = int(args.lr_warmup / goal_units_per_optimizer_step)
 
+    if misc_args.synthetic_data == True:
+        os.environ["TOKENIZERS_PARALLELISM"] = "False" # make sure there won't be any deadlocks when loading data by turning parallel tokenization off
+
     tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(
         args.tokenizer_path or args.model_name_or_path, use_fast=True
     )
@@ -410,8 +422,7 @@ def main(parsed_arg_groups: tuple[TrainingArgs, MiscArgs]):
 
     #################### Construct dataloaders & trainer #################
     if misc_args.synthetic_data == True:
-        os.environ["TOKENIZERS_PARALLELISM"] = "False" # make sure there won't be any deadlocks when loading data by turning parallel tokenization off
-        example = produce_example(tokenizer=tokenizer, sequence_length=args.max_seq_length)
+        example = produce_example(tokenizer=tokenizer, sequence_length=(misc_args.sd_seq_len if misc_args.sd_seq_len > 0 else args.max_sequence_length))
         synthetic_dataset = SyntheticDataset(dataset_size=misc_args.sd_size, example=example)
         dm = SyntheticDataModule(training_args=args, misc_args=misc_args, dataset=synthetic_dataset, tokenizer=tokenizer)
     else:

@@ -237,12 +237,9 @@ class MiscArgs:
     sd_seq_len: int = dArg(
         default = 0, help= "Sequence length of the synthetic data." 
     )
-    # sd_seq_len_var: int = dArg(
-    #     default = 1, help = "Variance of the sequence length of synthetic data."
-    # )
-    # sd_distribution: Literal["fixed", "normal"] = dArg(
-    #     default="fixed", help="Distribution of the sequence length of the synthetic data"
-    # )
+    sd_load_time_mean: float = dArg(
+        default=0, help="Mean loading time for the fetching of synthetic data."
+    )
 
 
 @logger.catch(reraise=True)
@@ -423,7 +420,7 @@ def main(parsed_arg_groups: tuple[TrainingArgs, MiscArgs]):
     #################### Construct dataloaders & trainer #################
     if misc_args.synthetic_data == True:
         example = produce_example(tokenizer=tokenizer, sequence_length=(misc_args.sd_seq_len if misc_args.sd_seq_len > 0 else args.max_sequence_length))
-        synthetic_dataset = SyntheticDataset(dataset_size=misc_args.sd_size, example=example)
+        synthetic_dataset = SyntheticDataset(dataset_size=misc_args.sd_size, example=example, load_time=misc_args.sd_load_time_mean)
         dm = SyntheticDataModule(training_args=args, misc_args=misc_args, dataset=synthetic_dataset, tokenizer=tokenizer)
     else:
         dm = LMDataModule(training_args=args, misc_args=misc_args)

@@ -8,9 +8,9 @@ This work is based on the [NLP research template](https://github.com/konstantinj
 ### Requirements
 This project is specifically designed to allow for reproducable results. We utilize ```conda-lock``` to provide reproducable environments. The recommended way to install ```conda-lock``` is using ```pipx install conda-lock```.
 
-To log the experiments we recommend using [Weights&Biases](https://wandb.ai/). Before running any experiments you have to set your WANDB_API_KEY, WANDB_ENTITY and WANDB_PROJECT as environment variables. To persist these variables you can specify them in your ```.bashrc```-file (e.g. ```export WANDB_PROJECT=deep_learning_benchmarks```).
+To log the experiments we recommend using [Weights&Biases](https://wandb.ai/). Before running any experiments you have to set your ```WANDB_API_KEY```, ```WANDB_ENTITY``` and ```WANDB_PROJECT``` as environment variables. To persist these variables you can specify them in your ```.bashrc```-file (e.g. ```export WANDB_PROJECT=deep_learning_benchmarks```).
 ### Basics
-The recommended way to use this project is by running the experiments inside a dedicated docker container. You can either use the already prebuilt [oliverzim/nlp-benchmarks](https://hub.docker.com/r/oliverzim/nlp-benchmarks)-image or build your own image with the ```Dockerfile``` cointained in the repository. The image contains all the necessary dependencies specified by the lockfile ```conda-lock.yml```. If you want to share your environments you can do so by sharing this lockfile.
+The recommended way to use this project is by running the experiments inside a dedicated docker container. You can either use the already prebuilt [oliverzim/nlp-benchmarks](https://hub.docker.com/r/oliverzim/nlp-benchmarks)-image or build your own image with the ```Dockerfile``` contained in the repository. The image contains all the necessary dependencies specified by the lockfile ```conda-lock.yml```. If you want to share your environments you can do so by sharing this lockfile.
 ### Updating the dependenices
 To change the dependencies you need to execute the following steps.
 1. Specify new dependencies in the ```environment.yml``` file.

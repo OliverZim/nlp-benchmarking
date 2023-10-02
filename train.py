@@ -131,6 +131,10 @@ class TrainingArgs:
         default=32,
         help="Floating point precision to use during training. Might require specific hardware.",
     )
+    precision_type: Literal["medium", "high", "highest"] = dArg(
+        default="high",
+        help="internal precision of float32 matrix multiplications"
+    )
     compile: bool = dArg(
         default=False,
         help="Whether to compile the model with `torch.compile`. Requires torch>=2.0",
@@ -408,7 +412,7 @@ def main(parsed_arg_groups: tuple[TrainingArgs, MiscArgs]):
     wandb_logger.watch(model, log="gradients", log_freq=500, log_graph=False)
 
     # https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
-    torch.set_float32_matmul_precision("high")
+    torch.set_float32_matmul_precision(args.precision_type)
     if args.compile:
         if not hasattr(torch, "compile"):
             raise RuntimeError(
